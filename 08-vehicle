@@ -1,0 +1,123 @@
+-- Parameters
+local speed_min = 1.6
+local take_off_distance = 20
+local iter_average_max = 1000
+local iter_correction_max = 1000
+local distance_min = 20
+local distance_max = 60
+local throttle_variation = 0.1
+
+-- Variables
+local correction = "No"
+local throttle_ini = 0
+local throttle = 0
+local iter_average = 0
+local total_distance = 0
+local iter_correction = 0
+
+function init()
+  -- Start in manual mode for setup
+  vehicle:set_mode(11) -- 11 represents MANUAL mode
+
+  -- Check if rangefinder object exists and has necessary methods
+  if not rangefinder or type(rangefinder.distance_cm_orient) ~= "function" or type(rangefinder.has_data) ~= "function" then
+    gcs:send_text(6, "Rangefinder initialization error") -- Send an error message if initialization fails
+    return false
+  end
+
+  return true -- Return true to indicate successful initialization
+end
+
+function resetCorrection()
+  correction = "No"
+  throttle = throttle_ini
+  iter_correction = 0
+end
+
+function logToFile(message)
+  local file = io.open("log.txt", "a") -- Open or create a file called "log.txt" in append mode ("a")
+  
+  if file then
+    file:write(os.date("[%Y-%m-%d %H:%M:%S] ") .. message .. "\n") -- Write the message with a timestamp
+    file:close() -- Close the file
+  else
+    gcs:send_text(6, "Error opening log file") -- Send an error message if file open fails
+  end
+end
+
+function stabilizeAltitude()
+  -- Check if rangefinder has data
+  if not rangefinder:has_data() then
+    gcs:send_text(6, "No RangeFinder") -- This line sends a text message
+    return false
+  end
+
+  -- Get sensor data
+  local instant_distance = rangefinder:distance_cm_orient(25) / 100 -- 25 orientation refers to a downward-facing rangefinder
+  
+  if instant_distance then
+    local flight_mode = vehicle:get_mode()
+    local speed = vehicle:get_ground_speed()
+
+    if flight_mode ~= "MANUAL" and speed > speed_min and instant_distance > take_off_distance then
+      if correction == "No" then -- No correction
+        iter_average = iter_average + 1
+        total_distance = total_distance + instant_distance
+
+        if iter_average == iter_average_max then
+          local avg_distance = total_distance / iter_average_max
+
+          if avg_distance <= distance_min then
+            correction = "Up"  
+            throttle_ini = throttle
+            throttle = throttle + (throttle_variation * throttle_ini)
+
+          elseif avg_distance >= distance_max then
+            correction = "Down"
+            throttle_ini = throttle 
+            throttle = throttle - (throttle_variation * throttle_ini)
+
+          end
+
+          logToFile("Cycle end. Corr: " .. correction .. " AvgDist: " .. avg_distance .. " Speed: " .. speed .. " Throttle: " .. throttle)
+
+          iter_average = 0
+        end
+
+      else -- Correction in progress
+        iter_correction = iter_correction + 1
+
+        if instant_distance > distance_min and instant_distance < distance_max then
+          resetCorrection()
+
+          logToFile("Corr complete. Dist: " .. instant_distance .. " Speed: " .. speed .. " Throttle: " .. throttle)
+        end
+
+        if iter_correction == iter_correction_max then
+          resetCorrection()
+
+          logToFile("Corr failed. Dist: " .. instant_distance .. " Speed: " .. speed .. " Throttle: " .. throttle)
+        end
+      end
+
+    else
+      resetCorrection()
+    end
+
+  else
+    resetCorrection()
+  end
+end
+
+function startMission()
+  if not init() then
+    return -- Exit the mission if initialization fails
+  end
+
+  while true do
+    stabilizeAltitude()
+    vehicle:sleep(1)
+  end
+end
+
+startMission()
