@@ -41,6 +41,7 @@ function logToFile(message)
   else
     gcs:send_text(6, "Error opening log file")  -- Send an error message if file open fails
 end
+end
 
 function stabilizeAltitude()
   -- Get sensor data
