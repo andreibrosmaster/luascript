@@ -1,0 +1,82 @@
+-- Parameters
+local speed_min = 1.6 
+local take_off_distance = 20
+local iter_average_max = 1000
+local iter_correction_max = 1000
+local distance_min = 20
+local distance_max = 60
+local throttle_variation = 0.1
+
+-- Variables
+local rangefinder 
+local correction = "No"
+local throttle_ini = 0
+local throttle = 0
+local iter_average = 0
+local total_distance = 0
+local iter_correction = 0
+
+function init()
+  -- Initialize rangefinder object
+  rangefinder = vehicle:initialize_rangefinder()
+  if not rangefinder then
+    print("Error initializing rangefinder")
+    return false
+  end
+  
+  -- Start in manual mode for setup
+  vehicle:set_mode("MANUAL")
+  
+  return true
+end
+
+function resetCorrection()
+  correction = "No"
+  throttle = throttle_ini
+  iter_correction = 0
+end
+
+function logToFile(message)
+  -- Write message to log file
+  -- TODO: Implement file logging  
+end
+
+function stabilizeAltitude()
+
+  -- Get sensor data
+  local sensor_data = rangefinder:read(0)
+  if not sensor_data then
+    print("Error reading from rangefinder")
+    return
+  end
+  
+  local instant_distance = sensor_data.distance
+
+  -- Flight mode and speed checks   
+  local flight_mode = vehicle:get_mode()
+  local speed = vehicle:get_ground_speed()
+
+  if flight_mode ~= "MANUAL" and
+     speed > speed_min and
+     instant_distance > take_off_distance then
+
+    -- Rest of function
+
+  end
+
+end
+
+function startMission()
+
+  if not init() then
+    return
+  end
+
+  while true do
+    stabilizeAltitude()  
+    vehicle:sleep(1)
+  end
+
+end
+
+startMission()
