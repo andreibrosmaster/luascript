@@ -24,8 +24,8 @@ function vehicle:get_rangefinder()
   local rangefinder = vehicle:get_component("rangefinder")
 
   -- If the rangefinder object is not nil, return the distance
-  if rangefinder then
-    return rangefinder:distance_cm_orient(25) / 100 -- 25 orientation refers to downward facing rangefinder
+  if rangefinder and rangefinder:has_data() then
+    return rangefinder:get_distance()
   end
 
   -- Otherwise, return nil
